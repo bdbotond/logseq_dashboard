@@ -1,0 +1,29 @@
+{
+  "name": "logseq-project-task-flow",
+  "version": "1.0.0",
+  "description": "Logseq plugin for project task tracking, automated project logs, live summary table, and mindmap visualization",
+  "main": "dist/index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "logseq": {
+    "id": "logseq-project-task-flow",
+    "title": "Project Task Flow & Mindmap",
+    "icon": "ti-layout-kanban"
+  },
+  "dependencies": {
+    "@logseq/libs": "^0.0.17",
+    "d3": "^7.9.0",
+    "markmap-common": "^0.18.9",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12"
+  },
+  "devDependencies": {
+    "@types/d3": "^7.4.3",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.1"
+  }
+}

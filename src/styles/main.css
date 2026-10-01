@@ -1,0 +1,374 @@
+:root {
+  --ptf-bg: var(--ls-primary-background-color, #ffffff);
+  --ptf-bg-secondary: var(--ls-secondary-background-color, #f8f9fa);
+  --ptf-bg-tertiary: var(--ls-tertiary-background-color, #edf2f7);
+  --ptf-text: var(--ls-primary-text-color, #2d3748);
+  --ptf-text-muted: var(--ls-secondary-text-color, #718096);
+  --ptf-border: var(--ls-border-color, #e2e8f0);
+  --ptf-primary: var(--ls-link-text-color, #3182ce);
+  --ptf-primary-hover: var(--ls-active-primary-color, #2b6cb0);
+  --ptf-success: #38a169;
+  --ptf-warning: #dd6b20;
+  --ptf-info: #3182ce;
+  --ptf-purple: #805ad5;
+  --ptf-radius: 8px;
+  --ptf-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ptf-bg: var(--ls-primary-background-color, #1a202c);
+    --ptf-bg-secondary: var(--ls-secondary-background-color, #2d3748);
+    --ptf-bg-tertiary: var(--ls-tertiary-background-color, #4a5568);
+    --ptf-text: var(--ls-primary-text-color, #edf2f7);
+    --ptf-text-muted: var(--ls-secondary-text-color, #a0aec0);
+    --ptf-border: var(--ls-border-color, #4a5568);
+    --ptf-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ptf-text);
+  background-color: transparent;
+}
+
+/* Modal Overlay & Card */
+.ptf-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(2px);
+}
+
+.ptf-modal-card {
+  background: var(--ptf-bg);
+  border: 1px solid var(--ptf-border);
+  border-radius: var(--ptf-radius);
+  width: 90%;
+  max-width: 520px;
+  box-shadow: var(--ptf-shadow);
+  overflow: hidden;
+  animation: ptfFadeIn 0.15s ease-out;
+}
+
+@keyframes ptfFadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.ptf-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ptf-border);
+  background: var(--ptf-bg-secondary);
+}
+
+.ptf-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ptf-text);
+}
+
+.ptf-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--ptf-text-muted);
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.ptf-modal-close:hover {
+  color: var(--ptf-text);
+  background: var(--ptf-bg-tertiary);
+}
+
+.ptf-modal-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ptf-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ptf-form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ptf-text-muted);
+}
+
+.ptf-input, .ptf-select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--ptf-border);
+  background: var(--ptf-bg-secondary);
+  color: var(--ptf-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ptf-input:focus, .ptf-select:focus {
+  border-color: var(--ptf-primary);
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.2);
+}
+
+.ptf-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ptf-modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--ptf-border);
+  background: var(--ptf-bg-secondary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Buttons */
+.ptf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+
+.ptf-btn-primary {
+  background: var(--ptf-primary);
+  color: #ffffff;
+}
+.ptf-btn-primary:hover {
+  background: var(--ptf-primary-hover);
+}
+
+.ptf-btn-secondary {
+  background: var(--ptf-bg-tertiary);
+  color: var(--ptf-text);
+  border-color: var(--ptf-border);
+}
+.ptf-btn-secondary:hover {
+  background: var(--ptf-border);
+}
+
+.ptf-btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* Dashboard Container */
+.ptf-dashboard {
+  background: var(--ptf-bg);
+  border: 1px solid var(--ptf-border);
+  border-radius: var(--ptf-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.ptf-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--ptf-bg-secondary);
+  border-bottom: 1px solid var(--ptf-border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ptf-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.ptf-tab-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ptf-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ptf-tab-btn:hover {
+  color: var(--ptf-text);
+  background: var(--ptf-bg-tertiary);
+}
+
+.ptf-tab-btn.active {
+  color: var(--ptf-primary);
+  background: var(--ptf-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.ptf-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ptf-search-input {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--ptf-border);
+  background: var(--ptf-bg);
+  color: var(--ptf-text);
+  font-size: 12px;
+  width: 140px;
+}
+
+/* Table View */
+.ptf-table-container {
+  overflow-x: auto;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.ptf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.ptf-table th {
+  position: sticky;
+  top: 0;
+  background: var(--ptf-bg-secondary);
+  color: var(--ptf-text-muted);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--ptf-border);
+  z-index: 1;
+}
+
+.ptf-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ptf-border);
+  color: var(--ptf-text);
+}
+
+.ptf-table tr:hover td {
+  background-color: var(--ptf-bg-secondary);
+}
+
+.ptf-link {
+  color: var(--ptf-primary);
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+.ptf-link:hover {
+  text-decoration: underline;
+}
+
+/* Status Badges */
+.ptf-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.ptf-badge-todo { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+.ptf-badge-next { background: #feebc8; color: #c05621; border: 1px solid #fbd38d; }
+.ptf-badge-doing, .ptf-badge-now { background: #ebf4ff; color: #434190; border: 1px solid #c3dafe; }
+.ptf-badge-done { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+.ptf-badge-later, .ptf-badge-waiting { background: #edf2f7; color: #4a5568; border: 1px solid #cbd5e0; }
+
+@media (prefers-color-scheme: dark) {
+  .ptf-badge-todo { background: #2a4365; color: #90cdf4; border-color: #2b6cb0; }
+  .ptf-badge-next { background: #7b341e; color: #fbd38d; border-color: #9c4221; }
+  .ptf-badge-doing, .ptf-badge-now { background: #44337a; color: #d6bcfa; border-color: #553c9a; }
+  .ptf-badge-done { background: #22543d; color: #9ae6b4; border-color: #276749; }
+  .ptf-badge-later, .ptf-badge-waiting { background: #4a5568; color: #e2e8f0; border-color: #718096; }
+}
+
+/* Mindmap View */
+.ptf-mindmap-view {
+  width: 100%;
+  height: 520px;
+  position: relative;
+  background: var(--ptf-bg);
+  overflow: hidden;
+}
+
+.ptf-mindmap-svg {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.ptf-mindmap-svg:active {
+  cursor: grabbing;
+}
+
+.ptf-mindmap-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  background: var(--ptf-bg);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--ptf-border);
+  box-shadow: var(--ptf-shadow);
+  z-index: 10;
+}
+
+.ptf-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 4px;
+  color: var(--ptf-text);
+}
+.ptf-icon-btn:hover {
+  background: var(--ptf-bg-tertiary);
+}
+
+.ptf-empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--ptf-text-muted);
+}
