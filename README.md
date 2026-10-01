@@ -1,6 +1,12 @@
-# Logseq Project Task Flow & Mindmap Plugin
+# Task Dashboard
+
+<p align="center">
+  <img src="icon.png" width="128" alt="Task Dashboard Icon" />
+</p>
 
 Logseq plugin for managing project task outlines, automated timestamped audit logs per project, live summary table, and mindmap visualization.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/bdbotond)
 
 ## Features
 
@@ -80,4 +86,3 @@ npm run typecheck
 # Production build
 npm run build
 ```
-# logseq_dashboard

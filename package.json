@@ -1,7 +1,13 @@
 {
-  "name": "logseq-project-task-flow",
+  "name": "logseq-task-dashboard",
   "version": "1.0.0",
   "description": "Logseq plugin for project task tracking, automated project logs, live summary table, and mindmap visualization",
+  "author": "bdbotond",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bdbotond/logseq_dashboard"
+  },
   "main": "dist/index.html",
   "scripts": {
     "dev": "vite",
@@ -9,9 +15,9 @@
     "typecheck": "tsc --noEmit"
   },
   "logseq": {
-    "id": "logseq-project-task-flow",
-    "title": "Project Task Flow & Mindmap",
-    "icon": "ti-layout-kanban",
+    "id": "logseq-task-dashboard",
+    "title": "Task Dashboard",
+    "icon": "icon.png",
     "dependencies": [
       "logseq-journals-calendar"
     ]
