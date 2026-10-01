@@ -1,8 +1,11 @@
 import '@logseq/libs';
+import mainCss from './styles/main.css?inline';
 import { LogseqService } from './services/logseqService';
 import { TaskWatcher } from './services/taskWatcher';
 import { DashboardRenderer } from './ui/dashboardRenderer';
 import { QuickCaptureModal } from './ui/quickCaptureModal';
+import { DependencyModal } from './ui/dependencyModal';
+import { ICONS } from './ui/icons';
 
 async function main() {
   console.log('[ProjectTaskFlow] Plugin loading...');
@@ -14,7 +17,10 @@ async function main() {
   const appContainer = document.getElementById('app') || document.body;
   const quickCaptureModal = new QuickCaptureModal(appContainer);
 
-  // Initialize task watcher for auto-logging completions
+  // Inject plugin styles into host Logseq DOM
+  logseq.provideStyle(mainCss);
+
+  // Initialize task watcher for auto-logging completions and live dashboard sync
   await taskWatcher.init();
 
   // Register interactive model handlers for provideUI buttons
@@ -24,35 +30,80 @@ async function main() {
     },
 
     async openDashboardModal() {
-      await dashboardRenderer.openFullDashboard(appContainer, 'mindmap');
+      await dashboardRenderer.openFullDashboard(appContainer);
     },
 
-    async openDashboardTable() {
-      await dashboardRenderer.openFullDashboard(appContainer, 'table');
-    },
-
-    async refreshMacroDashboard(e: any) {
-      const slot = e.dataset.slot;
-      if (slot) {
-        await dashboardRenderer.renderMacroSlot(slot);
-        logseq.UI.showMsg('Dashboard refreshed', 'success');
-      }
+    async refreshMacroDashboard() {
+      await dashboardRenderer.refreshAllSlots();
+      logseq.UI.showMsg('Dashboard refreshed', 'success');
     },
 
     async openProjectPage(e: any) {
-      const project = e.dataset.project;
-      if (project) {
+      const project = e.dataset?.project;
+      const page = e.dataset?.page;
+      if (project && project !== 'General') {
+        const existing = await logseq.Editor.getPage(project);
+        if (!existing) {
+          await logseq.Editor.createPage(project);
+        }
         await logseq.Editor.openInRightSidebar(project);
+      } else if (page && page !== 'General') {
+        await logseq.Editor.openInRightSidebar(page);
+      } else {
+        await logseq.Editor.openInRightSidebar('Projects & Tasks');
+      }
+    },
+
+    async jumpToTaskBlock(e: any) {
+      const uuid = e.dataset?.uuid;
+      const project = e.dataset?.project;
+      const page = e.dataset?.page;
+      if (uuid) {
+        await logseqService.jumpToBlock({
+          uuid,
+          project: project || '',
+          pageName: page || '',
+        });
+      }
+    },
+
+    async openEditDependencies(e: any) {
+      const uuid = e.dataset?.uuid;
+      if (uuid) {
+        const tasks = await logseqService.fetchTasksForDashboard();
+        const task = tasks.find((t) => t.uuid === uuid);
+        if (task) {
+          await DependencyModal.getInstance().open(task);
+        }
+      }
+    },
+
+    async syncTasksToJournals() {
+      const count = await logseqService.syncAllTasksToJournals();
+      logseq.UI.showMsg(`Synced ${count} task(s) to Daily Journals for Calendar`, 'success');
+      await dashboardRenderer.refreshAllSlots();
+    },
+
+    async openJournalsCalendar() {
+      await logseqService.openTodayJournal();
+    },
+
+    async toggleMacroTask(e: any) {
+      const uuid = e.dataset?.uuid;
+      const status = e.dataset?.status;
+      if (uuid && status) {
+        await logseqService.toggleTaskStatus(uuid, status);
+        await dashboardRenderer.refreshAllSlots();
       }
     },
   });
 
-  // Register toolbar buttons
+  // Register toolbar buttons (Professional icons without emojis)
   logseq.App.registerUIItem('toolbar', {
     key: 'ptf-quick-task-toolbar',
     template: `
       <a class="button" data-on-click="openQuickCapture" title="Project Flow: Quick Task Capture">
-        <i class="ti ti-plus"></i>
+        ${ICONS.plus}
       </a>
     `,
   });
@@ -61,7 +112,7 @@ async function main() {
     key: 'ptf-dashboard-toolbar',
     template: `
       <a class="button" data-on-click="openDashboardModal" title="Project Flow: Dashboard & Mindmap">
-        <i class="ti ti-layout-kanban"></i>
+        ${ICONS.kanban}
       </a>
     `,
   });
@@ -77,7 +128,13 @@ async function main() {
 
   logseq.Editor.registerSlashCommand('Initialize Projects & Tasks Page', async () => {
     await logseqService.createMasterTasksPage();
-    logseq.UI.showMsg('Master Projects & Tasks page initialized!', 'success');
+    logseq.UI.showMsg('Master Projects & Tasks page initialized', 'success');
+  });
+
+  logseq.Editor.registerSlashCommand('Sync Tasks to Journals', async () => {
+    const count = await logseqService.syncAllTasksToJournals();
+    logseq.UI.showMsg(`Synced ${count} task(s) to Daily Journals`, 'success');
+    await dashboardRenderer.refreshAllSlots();
   });
 
   // Register macro renderer for {{renderer :project-dashboard}}
@@ -91,7 +148,7 @@ async function main() {
   logseq.App.registerCommandPalette(
     {
       key: 'ptf-cmd-quick-task',
-      label: '⚡ Project Flow: Quick Task Capture',
+      label: 'Project Flow: Quick Task Capture',
       keybinding: {
         binding: 'mod+shift+t',
       },
@@ -104,21 +161,43 @@ async function main() {
   logseq.App.registerCommandPalette(
     {
       key: 'ptf-cmd-open-dashboard',
-      label: '📊 Project Flow: Open Live Mindmap & Summary Dashboard',
+      label: 'Project Flow: Open Dashboard & Mindmap',
     },
     async () => {
-      await dashboardRenderer.openFullDashboard(appContainer, 'mindmap');
+      await dashboardRenderer.openFullDashboard(appContainer);
     }
   );
 
   logseq.App.registerCommandPalette(
     {
       key: 'ptf-cmd-init-page',
-      label: '📋 Project Flow: Initialize Master Projects & Tasks Page',
+      label: 'Project Flow: Initialize Master Projects & Tasks Page',
     },
     async () => {
       await logseqService.createMasterTasksPage();
-      logseq.UI.showMsg('Master Projects & Tasks page ready!', 'success');
+      logseq.UI.showMsg('Master Projects & Tasks page ready', 'success');
+    }
+  );
+
+  logseq.App.registerCommandPalette(
+    {
+      key: 'ptf-cmd-sync-journals',
+      label: 'Project Flow: Sync All Tasks to Daily Journals (Calendar)',
+    },
+    async () => {
+      const count = await logseqService.syncAllTasksToJournals();
+      logseq.UI.showMsg(`Synced ${count} task(s) to Daily Journals`, 'success');
+      await dashboardRenderer.refreshAllSlots();
+    }
+  );
+
+  logseq.App.registerCommandPalette(
+    {
+      key: 'ptf-cmd-open-today-journal',
+      label: "Project Flow: Open Today's Journal (Journals Calendar)",
+    },
+    async () => {
+      await logseqService.openTodayJournal();
     }
   );
 

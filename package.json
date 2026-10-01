@@ -11,8 +11,24 @@
   "logseq": {
     "id": "logseq-project-task-flow",
     "title": "Project Task Flow & Mindmap",
-    "icon": "ti-layout-kanban"
+    "icon": "ti-layout-kanban",
+    "dependencies": [
+      "logseq-journals-calendar"
+    ]
   },
+  "peerDependencies": {
+    "logseq-journals-calendar": ">=0.1.0"
+  },
+  "keywords": [
+    "logseq",
+    "logseq-plugin",
+    "tasks",
+    "gantt",
+    "mindmap",
+    "journals-calendar",
+    "calendar",
+    "dependencies"
+  ],
   "dependencies": {
     "@logseq/libs": "^0.0.17",
     "d3": "^7.9.0",

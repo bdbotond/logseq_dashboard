@@ -48,7 +48,7 @@ This package integrates directly with the **Journals Calendar** plugin (`xyhp915
 2. Go to **Settings** (`...` menu in top right > `Settings`).
 3. Under **Advanced**, enable **Developer mode**.
 4. Open **Plugins** (`...` menu > `Plugins`) and switch to the **Installed** tab.
-5. Click **Load unpacked plugin** and select `/home/bdbotond/python/log_seq_plug_in`.
+5. Click **Load unpacked plugin** and select `./log_seq_plug_in`.
 
 ## Usage & Commands
 
