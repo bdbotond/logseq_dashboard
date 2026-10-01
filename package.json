@@ -22,9 +22,6 @@
       "logseq-journals-calendar"
     ]
   },
-  "peerDependencies": {
-    "logseq-journals-calendar": ">=0.1.0"
-  },
   "keywords": [
     "logseq",
     "logseq-plugin",
