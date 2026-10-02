@@ -18,9 +18,6 @@
     "id": "logseq-task-dashboard",
     "title": "Task Dashboard",
     "icon": "icon.png",
-    "dependencies": [
-      "logseq-journals-calendar"
-    ]
   },
   "keywords": [
     "logseq",
