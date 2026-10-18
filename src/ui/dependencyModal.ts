@@ -1,12 +1,14 @@
 import { LogseqService } from '../services/logseqService';
 import { ProjectTask, TaskDependency } from '../types';
 import { DashboardRenderer } from './dashboardRenderer';
-import { ICONS, escapeHtml } from './icons';
+import { escapeHtml } from './icons';
 
 export class DependencyModal {
   private static instance: DependencyModal;
   private logseqService = LogseqService.getInstance();
   private modalEl: HTMLElement | null = null;
+  private docClickHandler: ((e: MouseEvent) => void) | null = null;
+  private keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   public static getInstance(): DependencyModal {
     if (!DependencyModal.instance) {
@@ -138,7 +140,7 @@ export class DependencyModal {
     let selectedPredIdx = -1;
     let selectedSuccIdx = -1;
 
-    const onDocClick = (e: MouseEvent) => {
+    this.docClickHandler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (!predInput?.contains(target) && !predList?.contains(target)) {
         predList?.classList.remove('open');
@@ -147,19 +149,17 @@ export class DependencyModal {
         succList?.classList.remove('open');
       }
     };
-    document.addEventListener('click', onDocClick);
+    document.addEventListener('click', this.docClickHandler);
 
-    const onKeyDown = (e: KeyboardEvent) => {
+    this.keyDownHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         doClose();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', this.keyDownHandler);
 
     // Helper: close modal safely
     const doClose = () => {
-      document.removeEventListener('click', onDocClick);
-      window.removeEventListener('keydown', onKeyDown);
       this.close();
       if (!hasDashboardOverlay) {
         logseq.hideMainUI();
@@ -192,7 +192,7 @@ export class DependencyModal {
       predChips.style.display = 'flex';
       predChips.innerHTML = predecessors.map((d, i) => `
         <span class="ptf-chip">
-          <span class="ptf-chip-text">${d.title}</span>
+          <span class="ptf-chip-text">${escapeHtml(d.title)}</span>
           <button type="button" class="ptf-chip-remove" data-idx="${i}" title="Remove">&times;</button>
         </span>
       `).join('');
@@ -233,9 +233,9 @@ export class DependencyModal {
       const top = filtered.slice(0, 15);
       if (top.length > 0) {
         predList.innerHTML = top.map((t, idx) => `
-          <div class="ptf-combobox-item ptf-dep-pred-item" data-index="${idx}" data-uuid="${t.uuid}" data-title="${t.title.replace(/"/g, '&quot;')}">
-            <span style="font-weight: 500;">${t.title}</span>
-            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${t.project}]</span>
+          <div class="ptf-combobox-item ptf-dep-pred-item" data-index="${idx}" data-uuid="${escapeHtml(t.uuid)}" data-title="${escapeHtml(t.title)}">
+            <span style="font-weight: 500;">${escapeHtml(t.title)}</span>
+            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${escapeHtml(t.project)}]</span>
           </div>
         `).join('');
         predList.classList.add('open');
@@ -313,7 +313,7 @@ export class DependencyModal {
       succChips.style.display = 'flex';
       succChips.innerHTML = successors.map((d, i) => `
         <span class="ptf-chip">
-          <span class="ptf-chip-text">${d.title}</span>
+          <span class="ptf-chip-text">${escapeHtml(d.title)}</span>
           <button type="button" class="ptf-chip-remove" data-idx="${i}" title="Remove">&times;</button>
         </span>
       `).join('');
@@ -354,9 +354,9 @@ export class DependencyModal {
       const top = filtered.slice(0, 15);
       if (top.length > 0) {
         succList.innerHTML = top.map((t, idx) => `
-          <div class="ptf-combobox-item ptf-dep-succ-item" data-index="${idx}" data-uuid="${t.uuid}" data-title="${t.title.replace(/"/g, '&quot;')}">
-            <span style="font-weight: 500;">${t.title}</span>
-            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${t.project}]</span>
+          <div class="ptf-combobox-item ptf-dep-succ-item" data-index="${idx}" data-uuid="${escapeHtml(t.uuid)}" data-title="${escapeHtml(t.title)}">
+            <span style="font-weight: 500;">${escapeHtml(t.title)}</span>
+            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${escapeHtml(t.project)}]</span>
           </div>
         `).join('');
         succList.classList.add('open');
@@ -470,6 +470,14 @@ export class DependencyModal {
   }
 
   public close(): void {
+    if (this.docClickHandler) {
+      document.removeEventListener('click', this.docClickHandler);
+      this.docClickHandler = null;
+    }
+    if (this.keyDownHandler) {
+      window.removeEventListener('keydown', this.keyDownHandler);
+      this.keyDownHandler = null;
+    }
     if (this.modalEl && this.modalEl.parentNode) {
       this.modalEl.parentNode.removeChild(this.modalEl);
       this.modalEl = null;

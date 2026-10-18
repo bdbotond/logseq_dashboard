@@ -77,12 +77,22 @@ export function extractProjectName(block: any, priorityCategories: string[] = []
 
 export class LogseqService {
   private static instance: LogseqService;
+  private recentlyToggled = new Set<string>();
 
   public static getInstance(): LogseqService {
     if (!LogseqService.instance) {
       LogseqService.instance = new LogseqService();
     }
     return LogseqService.instance;
+  }
+
+  public markTaskHandled(uuid: string): void {
+    this.recentlyToggled.add(uuid);
+    setTimeout(() => this.recentlyToggled.delete(uuid), 3000);
+  }
+
+  public isTaskRecentlyHandled(uuid: string): boolean {
+    return this.recentlyToggled.has(uuid);
   }
 
   public getTimestamp(): string {
@@ -270,7 +280,8 @@ export class LogseqService {
       let insertedUuid = '';
       if (masterPage) {
         const blocks = await logseq.Editor.getPageBlocksTree(masterPageName);
-        let projectBlock = blocks && params.project !== 'General' ? this.findBlockWithContent(blocks, `[[${params.project}]]`) : null;
+        const targetHeading = params.project !== 'General' ? `[[${params.project}]]` : '### General Tasks';
+        let projectBlock = blocks ? this.findBlockWithContent(blocks, targetHeading) : null;
         if (!projectBlock) {
           if (params.project !== 'General') {
             projectBlock = await logseq.Editor.appendBlockInPage(masterPageName, `### [[${params.project}]]`);
@@ -490,7 +501,10 @@ export class LogseqService {
         let createdAt = block.properties?.createdAt || block.properties?.['created-at'];
         if (!createdAt) {
           const rawCreated = block.createdAt || block['created-at'] || block['block/created-at'];
-          if (rawCreated) createdAt = new Date(rawCreated).toISOString().slice(0, 10);
+          if (rawCreated) {
+            const d = new Date(rawCreated);
+            if (!isNaN(d.getTime())) createdAt = d.toISOString().slice(0, 10);
+          }
         }
 
         let completedAt = block.properties?.completedAt || block.properties?.['completed-at'] || block.properties?.['closed-at'];
@@ -502,7 +516,10 @@ export class LogseqService {
 
         if (!completedAt && block.marker === 'DONE') {
           const rawUpdated = block.updatedAt || block['updated-at'] || block['block/updated-at'];
-          if (rawUpdated) completedAt = new Date(rawUpdated).toISOString().slice(0, 10);
+          if (rawUpdated) {
+            const d = new Date(rawUpdated);
+            if (!isNaN(d.getTime())) completedAt = d.toISOString().slice(0, 10);
+          }
         }
 
         // Journal page date extraction for tasks logged on daily journals
@@ -538,8 +555,12 @@ export class LogseqService {
           }
         }
 
+        const rawUuid = block.uuid || block['block/uuid'];
+        const uuidStr = typeof rawUuid === 'string' ? rawUuid : String(rawUuid?.$uuid$ || rawUuid || '');
+        if (!uuidStr) continue;
+
         tasks.push({
-          uuid: block.uuid,
+          uuid: uuidStr,
           content: block.content,
           title: cleanTitle || 'Untitled Task',
           project,
@@ -547,10 +568,10 @@ export class LogseqService {
           status: block.marker as TaskStatus,
           priority,
           repeating,
-          scheduled,
-          deadline,
-          createdAt,
-          completedAt,
+          scheduled: scheduled ? String(scheduled) : undefined,
+          deadline: deadline ? String(deadline) : undefined,
+          createdAt: createdAt ? String(createdAt) : undefined,
+          completedAt: completedAt ? String(completedAt) : undefined,
           dependsOn,
         });
       }
@@ -588,6 +609,8 @@ export class LogseqService {
       const block = await logseq.Editor.getBlock(uuid);
       if (!block) return currentStatus;
 
+      this.markTaskHandled(uuid);
+
       const timestamp = this.getTimestamp();
       let newStatus: TaskStatus = 'DONE';
       const prevMarker = (block.properties?.prevMarker || block.properties?.['prev-marker']) as TaskStatus;
@@ -599,7 +622,7 @@ export class LogseqService {
         newStatus = prevMarker && validRestores.includes(prevMarker) ? prevMarker : 'TODO';
         const newContent = block.content.replace(/^DONE\s+/i, `${newStatus} `);
         await logseq.Editor.updateBlock(uuid, newContent);
-        await logseq.Editor.upsertBlockProperty(uuid, 'completed-at', '');
+        await logseq.Editor.removeBlockProperty(uuid, 'completed-at');
 
         const title = cleanTaskTitle(newContent) || 'Task';
 
@@ -613,11 +636,10 @@ export class LogseqService {
         }
       } else {
         newStatus = 'DONE';
-        await logseq.Editor.upsertBlockProperty(uuid, 'prev-marker', currentStatus);
-        await logseq.Editor.upsertBlockProperty(uuid, 'completed-at', timestamp);
-
         const newContent = block.content.replace(new RegExp(`^${currentStatus}\\s+`, 'i'), 'DONE ');
         await logseq.Editor.updateBlock(uuid, newContent);
+        await logseq.Editor.upsertBlockProperty(uuid, 'prev-marker', currentStatus);
+        await logseq.Editor.upsertBlockProperty(uuid, 'completed-at', timestamp);
 
         const title = cleanTaskTitle(newContent) || 'Task';
 
@@ -839,16 +861,27 @@ export class LogseqService {
 
       if (res && Array.isArray(res)) {
         for (const item of res) {
-          const b = item[0];
-          if (!b || !b['block/content']) continue;
-          const match = b['block/content'].match(/\{\{embed \(\(([a-zA-Z0-9_-]+)\)\)\}\}/);
+          const b = Array.isArray(item) ? item[0] : item;
+          const content = b?.content || b?.['block/content'];
+          if (!b || !content) continue;
+          const match = String(content).match(/\{\{embed \(\(([a-zA-Z0-9_-]+)\)\)\}\}/);
           if (match && match[1]) {
             const targetUuid = match[1];
             const targetBlock = await logseq.Editor.getBlock(targetUuid);
             if (!targetBlock) {
-              await logseq.Editor.removeBlock(b['block/uuid'] || b.uuid);
-              cleaned++;
-              const pageName = b['block/page']?.['block/name'] || b['block/page']?.['block/original-name'];
+              const rawUuid = b.uuid || b['block/uuid'];
+              const embedBlockUuid = typeof rawUuid === 'string' ? rawUuid : String(rawUuid?.$uuid$ || rawUuid || '');
+              if (embedBlockUuid) {
+                await logseq.Editor.removeBlock(embedBlockUuid);
+                cleaned++;
+              }
+              const pageObj = b.page || b['block/page'];
+              const pageName =
+                pageObj?.name ||
+                pageObj?.['block/name'] ||
+                pageObj?.originalName ||
+                pageObj?.['original-name'] ||
+                pageObj?.['block/original-name'];
               if (pageName) {
                 await this.cleanupEmptyJournalHeadings(pageName);
               }
@@ -867,8 +900,12 @@ export class LogseqService {
       const block = await logseq.Editor.getBlock(uuid);
       if (!block) return;
 
-      const scheduled = block.properties?.scheduled || block.properties?.['journal-scheduled'];
-      const deadline = block.properties?.deadline || block.properties?.['journal-deadline'];
+      const content = block.content || '';
+      const schedMatch = content.match(/SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})/i);
+      const deadMatch = content.match(/DEADLINE:\s*<(\d{4}-\d{2}-\d{2})/i);
+
+      const scheduled = block.properties?.scheduled || block.properties?.['journal-scheduled'] || schedMatch?.[1];
+      const deadline = block.properties?.deadline || block.properties?.['journal-deadline'] || deadMatch?.[1];
 
       await this.removeTaskFromJournals(uuid, scheduled, deadline);
       await logseq.Editor.removeBlock(uuid);
@@ -886,8 +923,9 @@ export class LogseqService {
   ): Promise<void> {
     try {
       const block = await logseq.Editor.getBlock(taskUuid);
-      const prevScheduled = block?.properties?.['journal-scheduled'] as string | undefined;
-      const prevDeadline = block?.properties?.['journal-deadline'] as string | undefined;
+      if (!block) return;
+      const prevScheduled = block.properties?.['journal-scheduled'] as string | undefined;
+      const prevDeadline = block.properties?.['journal-deadline'] as string | undefined;
 
       if (prevScheduled && prevScheduled !== scheduledDate) {
         const oldPage = await this.getOrCreateJournalPage(prevScheduled);
@@ -904,7 +942,9 @@ export class LogseqService {
             '### 📅 Scheduled Tasks',
             taskUuid
           );
-          await logseq.Editor.upsertBlockProperty(taskUuid, 'journal-scheduled', scheduledDate);
+          if (prevScheduled !== scheduledDate) {
+            await logseq.Editor.upsertBlockProperty(taskUuid, 'journal-scheduled', scheduledDate);
+          }
         }
       } else if (prevScheduled) {
         await logseq.Editor.removeBlockProperty(taskUuid, 'journal-scheduled');
@@ -925,7 +965,9 @@ export class LogseqService {
             '### ⏳ Due Today (Deadlines)',
             taskUuid
           );
-          await logseq.Editor.upsertBlockProperty(taskUuid, 'journal-deadline', deadlineDate);
+          if (prevDeadline !== deadlineDate) {
+            await logseq.Editor.upsertBlockProperty(taskUuid, 'journal-deadline', deadlineDate);
+          }
         }
       } else if (prevDeadline) {
         await logseq.Editor.removeBlockProperty(taskUuid, 'journal-deadline');

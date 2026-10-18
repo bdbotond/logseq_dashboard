@@ -3,7 +3,8 @@
  */
 export function exportSvgToPng(svgEl: SVGElement, filename: string): void {
   try {
-    const comp = getComputedStyle(document.body);
+    const ownerBody = svgEl.ownerDocument?.body || document.body;
+    const comp = getComputedStyle(ownerBody);
     const bgColor = comp.getPropertyValue('--ptf-bg').trim() || '#ffffff';
     const textColor = comp.getPropertyValue('--ptf-text').trim() || '#1a202c';
     const mutedColor = comp.getPropertyValue('--ptf-text-muted').trim() || '#718096';
@@ -138,18 +139,19 @@ export function exportSvgToPng(svgEl: SVGElement, filename: string): void {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
     };
 
     const img = new Image();
     img.onload = () => {
       try {
-        const scale = 2; // Crisp 2x export
+        // ponytail: cap at 16000px max canvas dimension to stay under Chromium 16384px limit
+        const scale = Math.min(2, 16000 / Math.max(width, height, 1));
         const canvas = document.createElement('canvas');
-        canvas.width = width * scale;
-        canvas.height = height * scale;
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          URL.revokeObjectURL(url);
           triggerDownload(url, 'svg');
           return;
         }
@@ -167,7 +169,6 @@ export function exportSvgToPng(svgEl: SVGElement, filename: string): void {
           }
           const pngUrl = URL.createObjectURL(pngBlob);
           triggerDownload(pngUrl, 'png');
-          setTimeout(() => URL.revokeObjectURL(pngUrl), 5000);
         }, 'image/png');
       } catch (canvasErr) {
         console.warn('[ProjectTaskFlow] Canvas rasterization failed, falling back to SVG:', canvasErr);

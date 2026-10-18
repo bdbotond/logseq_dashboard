@@ -1,5 +1,6 @@
 import { LogseqService } from '../services/logseqService';
 import { DashboardFilter, ProjectTask } from '../types';
+import { DashboardRenderer } from './dashboardRenderer';
 import { DependencyModal } from './dependencyModal';
 import { ICONS, escapeHtml } from './icons';
 
@@ -270,19 +271,19 @@ export class SummaryTable {
           }
 
           return `
-            <tr data-uuid="${t.uuid}" class="ptf-row ${isDone ? 'ptf-row-done' : ''} ${isOverdue ? 'ptf-row-overdue' : ''}">
+            <tr data-uuid="${escapeHtml(t.uuid)}" class="ptf-row ${isDone ? 'ptf-row-done' : ''} ${isOverdue ? 'ptf-row-overdue' : ''}">
               <td class="ptf-cell-check">
                 <input
                   type="checkbox"
                   class="ptf-checkbox ptf-task-toggle"
-                  data-uuid="${t.uuid}"
+                  data-uuid="${escapeHtml(t.uuid)}"
                   ${isDone ? 'checked' : ''}
                   title="${isDone ? 'Reopen task' : 'Mark as completed'}"
                 />
               </td>
               <td class="ptf-cell-project" title="${escapeHtml(t.project)}">
                 ${t.project && t.project !== 'General'
-                  ? `<a class="ptf-link ptf-project-link" data-project="${t.project}" data-page="${t.pageName || ''}" title="Open [[${t.project}]] in sidebar">
+                  ? `<a class="ptf-link ptf-project-link" data-project="${escapeHtml(t.project)}" data-page="${escapeHtml(t.pageName || '')}" title="Open [[${escapeHtml(t.project)}]] in sidebar">
                       [[${escapeHtml(t.project)}]]
                     </a>`
                   : `<span class="ptf-badge-general" title="General task">General</span>`
@@ -293,25 +294,25 @@ export class SummaryTable {
               </td>
               <td class="ptf-cell-title" title="${escapeHtml(t.title)}">
                 <div class="ptf-title-content">
-                  <span class="${badgeClass}">${t.status}</span>
-                  <button type="button" class="ptf-dep-badge ${t.dependsOn && t.dependsOn.length > 0 ? 'ptf-dep-badge-active' : 'ptf-dep-badge-muted'} ptf-dep-edit-btn" data-uuid="${t.uuid}" title="${t.dependsOn && t.dependsOn.length > 0 ? `Depends on ${t.dependsOn.length} task(s) - click to edit` : 'Edit dependencies'}">🔗${t.dependsOn && t.dependsOn.length > 0 ? ` ${t.dependsOn.length}` : ''}</button>
+                  <span class="${badgeClass}">${escapeHtml(t.status)}</span>
+                  <button type="button" class="ptf-dep-badge ${t.dependsOn && t.dependsOn.length > 0 ? 'ptf-dep-badge-active' : 'ptf-dep-badge-muted'} ptf-dep-edit-btn" data-uuid="${escapeHtml(t.uuid)}" title="${t.dependsOn && t.dependsOn.length > 0 ? `Depends on ${t.dependsOn.length} task(s) - click to edit` : 'Edit dependencies'}">🔗${t.dependsOn && t.dependsOn.length > 0 ? ` ${t.dependsOn.length}` : ''}</button>
                   <span class="ptf-task-title ${isDone ? 'ptf-task-done' : ''}">${escapeHtml(t.title)}</span>
                 </div>
               </td>
               <td class="ptf-cell-date">
                 <div style="display: flex; flex-direction: column; gap: 2px;">
-                  <div>${t.scheduled || '—'} ${t.repeating ? `<span class="ptf-recur-pill" title="Repeats: ${escapeHtml(t.repeating)}">🔁 ${escapeHtml(t.repeating)}</span>` : ''}</div>
+                  <div>${t.scheduled ? escapeHtml(t.scheduled) : '—'} ${t.repeating ? `<span class="ptf-recur-pill" title="Repeats: ${escapeHtml(t.repeating)}">🔁 ${escapeHtml(t.repeating)}</span>` : ''}</div>
                   ${t.deadline ? `<span class="ptf-deadline-sub ${isOverdue ? 'ptf-deadline-overdue' : ''}" title="${isOverdue ? 'Overdue deadline!' : 'Deadline / Due Date'}">${isOverdue ? '⚠️ ' : '⏳ '}${escapeHtml(t.deadline)}${isOverdue ? ' (Overdue)' : ''}</span>` : ''}
                 </div>
               </td>
-              <td class="ptf-cell-date">${t.createdAt || '—'}</td>
-              <td class="ptf-cell-date">${t.completedAt || '—'}</td>
+              <td class="ptf-cell-date">${t.createdAt ? escapeHtml(t.createdAt) : '—'}</td>
+              <td class="ptf-cell-date">${t.completedAt ? escapeHtml(t.completedAt) : '—'}</td>
               <td class="ptf-cell-action">
                 <div style="display: flex; gap: 4px; align-items: center;">
-                  <button class="ptf-btn ptf-btn-secondary ptf-btn-sm ptf-jump-btn" data-uuid="${t.uuid}" data-project="${t.project}" data-page="${t.pageName || ''}" title="Jump to Block">
+                  <button class="ptf-btn ptf-btn-secondary ptf-btn-sm ptf-jump-btn" data-uuid="${escapeHtml(t.uuid)}" data-project="${escapeHtml(t.project)}" data-page="${escapeHtml(t.pageName || '')}" title="Jump to Block">
                     Jump ${ICONS.externalLink}
                   </button>
-                  <button class="ptf-btn ptf-btn-secondary ptf-btn-sm ptf-delete-task-btn" data-uuid="${t.uuid}" data-title="${escapeHtml(t.title)}" title="Delete Task & Remove from Calendar" style="color: #e53e3e; padding: 4px 6px;">
+                  <button class="ptf-btn ptf-btn-secondary ptf-btn-sm ptf-delete-task-btn" data-uuid="${escapeHtml(t.uuid)}" data-title="${escapeHtml(t.title)}" title="Delete Task & Remove from Calendar" style="color: #e53e3e; padding: 4px 6px;">
                     🗑️
                   </button>
                 </div>
@@ -347,6 +348,7 @@ export class SummaryTable {
             task.completedAt = undefined;
           }
           this.renderRows();
+          this.onRefresh?.();
         } catch (err) {
           task.status = oldStatus;
           this.renderRows();
@@ -380,7 +382,7 @@ export class SummaryTable {
             project,
             pageName: page,
           });
-          logseq.hideMainUI();
+          DashboardRenderer.getInstance().closeModal();
         }
       });
     });

@@ -1,18 +1,34 @@
 import { DashboardRenderer } from './dashboardRenderer';
 import { LogseqService } from '../services/logseqService';
 import { TaskDependency, TaskStatus } from '../types';
-import { ICONS } from './icons';
+import { ICONS, escapeHtml } from './icons';
 
 export class QuickCaptureModal {
   private logseqService = LogseqService.getInstance();
   private container: HTMLElement;
   private selectedIndex = -1;
+  private docClickHandler: ((e: MouseEvent) => void) | null = null;
+  private keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
   }
 
+  private cleanupListeners(): void {
+    if (this.docClickHandler) {
+      document.removeEventListener('click', this.docClickHandler);
+      this.docClickHandler = null;
+    }
+    if (this.keyDownHandler) {
+      window.removeEventListener('keydown', this.keyDownHandler);
+      this.keyDownHandler = null;
+    }
+  }
+
   public async open(): Promise<void> {
+    this.cleanupListeners();
+    DashboardRenderer.getInstance().closeModal(false);
+
     const [projects, allTasks] = await Promise.all([
       this.logseqService.getAllProjects(),
       this.logseqService.fetchTasksForDashboard(),
@@ -46,7 +62,7 @@ export class QuickCaptureModal {
                   id="ptf-project-input"
                   class="ptf-input"
                   placeholder="Select existing or type new project name..."
-                  value="${defaultProject}"
+                  value="${escapeHtml(defaultProject)}"
                   autocomplete="off"
                   required
                 />
@@ -234,11 +250,12 @@ export class QuickCaptureModal {
 
       let itemsHtml = '';
       filtered.forEach((p, idx) => {
-        itemsHtml += `<div class="ptf-combobox-item" data-index="${idx}" data-value="${p}">${p}</div>`;
+        itemsHtml += `<div class="ptf-combobox-item" data-index="${idx}" data-value="${escapeHtml(p)}">${escapeHtml(p)}</div>`;
       });
 
       if (query.trim() && !hasExactMatch) {
-        itemsHtml += `<div class="ptf-combobox-item ptf-combobox-item-new" data-index="${filtered.length}" data-value="${query.trim()}">+ Create new project: "${query.trim()}"</div>`;
+        const trimmedQ = escapeHtml(query.trim());
+        itemsHtml += `<div class="ptf-combobox-item ptf-combobox-item-new" data-index="${filtered.length}" data-value="${trimmedQ}">+ Create new project: "${trimmedQ}"</div>`;
       }
 
       if (itemsHtml) {
@@ -332,7 +349,7 @@ export class QuickCaptureModal {
       dependsChips.style.display = 'flex';
       dependsChips.innerHTML = selectedDependencies.map((dep, idx) => `
         <span class="ptf-chip">
-          <span class="ptf-chip-text">${dep.title}</span>
+          <span class="ptf-chip-text">${escapeHtml(dep.title)}</span>
           <button type="button" class="ptf-chip-remove" data-idx="${idx}" title="Remove dependency">&times;</button>
         </span>
       `).join('');
@@ -372,9 +389,9 @@ export class QuickCaptureModal {
 
       if (topItems.length > 0) {
         dependsList.innerHTML = topItems.map((t, idx) => `
-          <div class="ptf-combobox-item ptf-dep-item" data-index="${idx}" data-uuid="${t.uuid}" data-title="${t.title.replace(/"/g, '&quot;')}">
-            <span style="font-weight: 500;">${t.title}</span>
-            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${t.project}]</span>
+          <div class="ptf-combobox-item ptf-dep-item" data-index="${idx}" data-uuid="${escapeHtml(t.uuid)}" data-title="${escapeHtml(t.title)}">
+            <span style="font-weight: 500;">${escapeHtml(t.title)}</span>
+            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${escapeHtml(t.project)}]</span>
           </div>
         `).join('');
         dependsList.classList.add('open');
@@ -461,7 +478,7 @@ export class QuickCaptureModal {
       blocksChips.style.display = 'flex';
       blocksChips.innerHTML = selectedBlocks.map((dep, idx) => `
         <span class="ptf-chip">
-          <span class="ptf-chip-text">${dep.title}</span>
+          <span class="ptf-chip-text">${escapeHtml(dep.title)}</span>
           <button type="button" class="ptf-chip-remove" data-idx="${idx}" title="Remove successor">&times;</button>
         </span>
       `).join('');
@@ -501,9 +518,9 @@ export class QuickCaptureModal {
 
       if (topItems.length > 0) {
         blocksList.innerHTML = topItems.map((t, idx) => `
-          <div class="ptf-combobox-item ptf-block-item" data-index="${idx}" data-uuid="${t.uuid}" data-title="${t.title.replace(/"/g, '&quot;')}">
-            <span style="font-weight: 500;">${t.title}</span>
-            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${t.project}]</span>
+          <div class="ptf-combobox-item ptf-block-item" data-index="${idx}" data-uuid="${escapeHtml(t.uuid)}" data-title="${escapeHtml(t.title)}">
+            <span style="font-weight: 500;">${escapeHtml(t.title)}</span>
+            <span style="font-size: 11px; color: var(--ptf-text-muted); margin-left: 8px;">[${escapeHtml(t.project)}]</span>
           </div>
         `).join('');
         blocksList.classList.add('open');
@@ -597,12 +614,13 @@ export class QuickCaptureModal {
         const canDelete = !isDefault(cat);
         const lower = cat.toLowerCase();
         const colorClass = lower === 'important' ? 'ptf-cat-important' : lower === 'normal' ? 'ptf-cat-normal' : lower === 'hobby' ? 'ptf-cat-hobby' : 'ptf-cat-custom';
+        const safeCat = escapeHtml(cat);
         html += `
           <div class="ptf-cat-pill-wrap">
-            <button type="button" class="ptf-cat-pill ${colorClass} ${active}" data-cat="${cat}">
-              #${cat}
+            <button type="button" class="ptf-cat-pill ${colorClass} ${active}" data-cat="${safeCat}">
+              #${safeCat}
             </button>
-            ${canDelete ? `<button type="button" class="ptf-cat-delete-btn" data-delete-cat="${cat}" title="Delete category">&times;</button>` : ''}
+            ${canDelete ? `<button type="button" class="ptf-cat-delete-btn" data-delete-cat="${safeCat}" title="Delete category">&times;</button>` : ''}
           </div>
         `;
       });
@@ -829,7 +847,7 @@ export class QuickCaptureModal {
       });
     });
 
-    const onDocClick = (e: MouseEvent) => {
+    this.docClickHandler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (!projectInput?.contains(target) && !projectList?.contains(target)) {
         projectList?.classList.remove('open');
@@ -841,19 +859,18 @@ export class QuickCaptureModal {
         blocksList?.classList.remove('open');
       }
     };
-    document.addEventListener('click', onDocClick);
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('click', this.docClickHandler);
 
     const close = () => {
-      document.removeEventListener('click', onDocClick);
-      window.removeEventListener('keydown', onKeyDown);
+      this.cleanupListeners();
       this.container.innerHTML = '';
       logseq.hideMainUI();
     };
+
+    this.keyDownHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', this.keyDownHandler);
 
     closeBtn?.addEventListener('click', close);
     cancelBtn?.addEventListener('click', close);
@@ -861,8 +878,10 @@ export class QuickCaptureModal {
       if (e.target === overlay) close();
     });
 
+    let isSubmitting = false;
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isSubmitting) return;
       const projectName = projectInput.value.trim();
       const title = titleInput.value.trim();
       const status = (document.getElementById('ptf-task-status') as HTMLSelectElement).value as TaskStatus;
@@ -871,6 +890,13 @@ export class QuickCaptureModal {
       const repeating = getRepeatingString();
 
       if (!title || !projectName) return;
+
+      isSubmitting = true;
+      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Adding...';
+      }
 
       try {
         await this.logseqService.addTaskToProject({
@@ -888,6 +914,11 @@ export class QuickCaptureModal {
         await DashboardRenderer.getInstance().refreshAllSlots();
       } catch (err) {
         console.error(err);
+        isSubmitting = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Task & Sync';
+        }
       }
     });
   }

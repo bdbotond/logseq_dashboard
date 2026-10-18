@@ -1,4 +1,5 @@
 import { DashboardRenderer } from '../ui/dashboardRenderer';
+import { ProjectTask } from '../types';
 import { LogseqService, cleanTaskTitle, extractProjectName } from './logseqService';
 
 export class TaskWatcher {
@@ -6,8 +7,9 @@ export class TaskWatcher {
   private blockStatusCache = new Map<string, string>();
   private knownTasks = new Map<string, { scheduled?: string; deadline?: string }>();
   private isInitialized = false;
+  private isSyncing = false;
   private logseqService = LogseqService.getInstance();
-  private debounceTimer: any = null;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   public static getInstance(): TaskWatcher {
     if (!TaskWatcher.instance) {
@@ -20,20 +22,6 @@ export class TaskWatcher {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    try {
-      const initialTasks = await this.logseqService.fetchTasksForDashboard();
-      for (const t of initialTasks) {
-        if (t.uuid) {
-          if (t.status) this.blockStatusCache.set(t.uuid, t.status);
-          this.knownTasks.set(t.uuid, { scheduled: t.scheduled, deadline: t.deadline });
-        }
-      }
-      // Also cleanup any orphaned journal embeds from earlier deletions
-      await this.logseqService.cleanupAllOrphanedJournalEmbeds();
-    } catch (err) {
-      console.warn('[ProjectTaskFlow] Error pre-populating task watcher cache:', err);
-    }
-
     logseq.DB.onChanged(async ({ blocks }: { blocks: any[] }) => {
       if (!blocks || !Array.isArray(blocks)) return;
 
@@ -41,21 +29,23 @@ export class TaskWatcher {
 
       for (const block of blocks) {
         if (!block || !block.uuid) continue;
+        const uuid = typeof block.uuid === 'string' ? block.uuid : String(block.uuid?.$uuid$ || block.uuid || '');
+        if (!uuid) continue;
 
-        const prevMarker = this.blockStatusCache.get(block.uuid);
+        const prevMarker = this.blockStatusCache.get(uuid);
         const currentMarker = block.marker;
 
-        if (currentMarker === 'DONE' && prevMarker && prevMarker !== 'DONE') {
-          hasRelevantChange = true;
-          await this.handleTaskCompleted(block, prevMarker);
-        } else if (prevMarker !== currentMarker) {
+        if (currentMarker) {
+          this.blockStatusCache.set(uuid, currentMarker);
+        } else if (prevMarker) {
+          this.blockStatusCache.delete(uuid);
           hasRelevantChange = true;
         }
 
-        if (currentMarker) {
-          this.blockStatusCache.set(block.uuid, currentMarker);
-        } else if (prevMarker) {
-          this.blockStatusCache.delete(block.uuid);
+        if (currentMarker === 'DONE' && prevMarker && prevMarker !== 'DONE') {
+          hasRelevantChange = true;
+          await this.handleTaskCompleted({ ...block, uuid }, prevMarker);
+        } else if (prevMarker !== currentMarker) {
           hasRelevantChange = true;
         }
       }
@@ -64,16 +54,36 @@ export class TaskWatcher {
       if (hasRelevantChange) {
         if (this.debounceTimer) clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(async () => {
-          await this.detectAndCleanupDeletedTasks();
-          await DashboardRenderer.getInstance().refreshAllSlots();
-        }, 300);
+          if (this.isSyncing) return;
+          this.isSyncing = true;
+          try {
+            const currentTasks = await this.detectAndCleanupDeletedTasks();
+            await DashboardRenderer.getInstance().refreshAllSlots(currentTasks);
+          } finally {
+            this.isSyncing = false;
+          }
+        }, 400);
       }
     });
+
+    try {
+      const initialTasks = await this.logseqService.fetchTasksForDashboard();
+      for (const t of initialTasks) {
+        if (t.uuid) {
+          if (t.status) this.blockStatusCache.set(t.uuid, t.status);
+          this.knownTasks.set(t.uuid, { scheduled: t.scheduled, deadline: t.deadline });
+        }
+      }
+      // Cleanup any orphaned journal embeds in background without blocking startup
+      void this.logseqService.cleanupAllOrphanedJournalEmbeds();
+    } catch (err) {
+      console.warn('[ProjectTaskFlow] Error pre-populating task watcher cache:', err);
+    }
 
     console.log('[ProjectTaskFlow] TaskWatcher active.');
   }
 
-  public async detectAndCleanupDeletedTasks(): Promise<void> {
+  public async detectAndCleanupDeletedTasks(): Promise<ProjectTask[]> {
     try {
       const currentTasks = await this.logseqService.fetchTasksForDashboard();
       const currentUuidSet = new Set(currentTasks.map((t) => t.uuid));
@@ -92,16 +102,19 @@ export class TaskWatcher {
           this.knownTasks.set(t.uuid, { scheduled: t.scheduled, deadline: t.deadline });
         }
       }
+      return currentTasks;
     } catch (err) {
       console.warn('[ProjectTaskFlow] Error detecting deleted tasks in watcher:', err);
+      return [];
     }
   }
 
   private recentlyCompleted = new Set<string>();
 
   private async handleTaskCompleted(block: any, prevMarker: string): Promise<void> {
-    if (this.recentlyCompleted.has(block.uuid)) return;
+    if (this.recentlyCompleted.has(block.uuid) || this.logseqService.isTaskRecentlyHandled(block.uuid)) return;
     this.recentlyCompleted.add(block.uuid);
+    this.logseqService.markTaskHandled(block.uuid);
     setTimeout(() => this.recentlyCompleted.delete(block.uuid), 3000);
 
     const timestamp = this.logseqService.getTimestamp();

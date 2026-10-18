@@ -20,9 +20,6 @@ async function main() {
   // Inject plugin styles into host Logseq DOM
   logseq.provideStyle(mainCss);
 
-  // Initialize task watcher for auto-logging completions and live dashboard sync
-  await taskWatcher.init();
-
   // Register interactive model handlers for provideUI buttons
   logseq.provideModel({
     async openQuickCapture() {
@@ -200,6 +197,9 @@ async function main() {
       await logseqService.openTodayJournal();
     }
   );
+
+  // Initialize task watcher for auto-logging completions and live dashboard sync
+  await taskWatcher.init();
 
   console.log('[ProjectTaskFlow] Plugin loaded successfully.');
 }

@@ -1,6 +1,7 @@
 import * as d3 from 'd3';
 import { ProjectTask, TaskStatus } from '../types';
 import { LogseqService } from '../services/logseqService';
+import { DashboardRenderer } from './dashboardRenderer';
 import { DependencyModal } from './dependencyModal';
 import { escapeHtml } from './icons';
 import { exportSvgToPng } from './exportUtils';
@@ -32,6 +33,7 @@ export class GanttChart {
   private customStart: Date | null = null;
   private customEnd: Date | null = null;
   private selectedProject: string = 'ALL';
+  private isRendering = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -86,6 +88,8 @@ export class GanttChart {
   }
 
   public render(): void {
+    if (this.isRendering) return;
+    this.isRendering = true;
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -282,7 +286,8 @@ export class GanttChart {
       const availableWidth = Math.max(500, Math.floor(containerWidth - chartMargin.left - chartMargin.right - 35));
       const spanDays = Math.max(1, Math.ceil((endRange.getTime() - startRange.getTime()) / (1000 * 3600 * 24)));
       const dayColWidth = this.timeScaleMode === 'DAYS' ? 40 : 18;
-      const chartContentWidth = Math.max(availableWidth, spanDays * dayColWidth);
+      // ponytail: cap SVG width at 8000px; switch to virtualized viewport if >20yr daily zoom is needed
+      const chartContentWidth = Math.min(8000, Math.max(availableWidth, spanDays * dayColWidth));
       const totalSvgWidth = chartMargin.left + chartContentWidth + chartMargin.right;
 
     // Calculate row heights
@@ -502,18 +507,16 @@ export class GanttChart {
       });
     });
 
-    // Handle custom date pickers (debounced with blur/Enter commit to allow multi-digit typing)
+    // Handle custom date pickers (commit on Enter or blur when changed to avoid mid-typing focus loss and re-entrant blur)
     const setupDateInput = (input: HTMLInputElement | null, isStart: boolean) => {
       if (!input) return;
-      let timer: any = null;
+      const initialFormatted = this.formatDate(isStart ? startRange : endRange);
 
       const apply = () => {
-        if (timer) {
-          clearTimeout(timer);
-          timer = null;
-        }
+        if (this.isRendering) return;
         const val = this.parseDate(input.value);
         if (!val || val.getFullYear() < 1970 || val.getFullYear() > 2100) return;
+        if (this.formatDate(val) === initialFormatted) return;
         if (isStart) {
           let curEnd = endRange;
           if (val.getTime() >= curEnd.getTime()) {
@@ -532,23 +535,10 @@ export class GanttChart {
       };
 
       input.addEventListener('keydown', (e) => {
-        if (timer) clearTimeout(timer);
         if (e.key === 'Enter') {
           e.preventDefault();
           apply();
-        } else {
-          timer = setTimeout(apply, 800);
         }
-      });
-
-      input.addEventListener('input', () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(apply, 800);
-      });
-
-      input.addEventListener('change', () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(apply, 800);
       });
 
       input.addEventListener('blur', () => {
@@ -679,9 +669,13 @@ export class GanttChart {
     // X Axis
     const axisGroup = svg.append('g').attr('class', 'ptf-gantt-axis').attr('transform', `translate(0, ${chartMargin.top - 8})`);
 
+    const dayStep = Math.max(1, Math.ceil(spanDays / 60));
+    const weekStep = Math.max(1, Math.ceil(spanDays / 420));
+    const tickInterval = (this.timeScaleMode === 'DAYS' ? d3.timeDay.every(dayStep) : d3.timeWeek.every(weekStep)) || d3.timeDay;
+
     const axis = this.timeScaleMode === 'DAYS'
-      ? d3.axisTop(xScale).ticks(d3.timeDay).tickFormat((d) => d3.timeFormat('%a %d')(d as Date))
-      : d3.axisTop(xScale).ticks(d3.timeWeek).tickFormat((d) => d3.timeFormat('%b %d')(d as Date));
+      ? d3.axisTop(xScale).ticks(tickInterval).tickFormat((d) => d3.timeFormat('%a %d')(d as Date))
+      : d3.axisTop(xScale).ticks(tickInterval).tickFormat((d) => d3.timeFormat('%b %d')(d as Date));
 
     axisGroup.call(axis as any);
     axisGroup
@@ -699,7 +693,7 @@ export class GanttChart {
     axisGroup.select('.domain').style('stroke', 'var(--ptf-border)');
 
     // Vertical grid lines
-    const gridTicks = this.timeScaleMode === 'DAYS' ? xScale.ticks(d3.timeDay) : xScale.ticks(d3.timeWeek);
+    const gridTicks = xScale.ticks(tickInterval);
     const gridGroup = svg.append('g').attr('class', 'ptf-gantt-grid');
     gridGroup
       .selectAll('line')
@@ -810,7 +804,7 @@ export class GanttChart {
               project: t.project,
               pageName: t.pageName,
             });
-            logseq.hideMainUI();
+            DashboardRenderer.getInstance().closeModal();
           });
 
         const depBtn = labelG
@@ -1099,7 +1093,7 @@ export class GanttChart {
               project: t.project,
               pageName: t.pageName,
             });
-            logseq.hideMainUI();
+            DashboardRenderer.getInstance().closeModal();
           });
       }
     });
@@ -1183,6 +1177,8 @@ export class GanttChart {
           <p style="color: var(--ptf-warning, #dd6b20);">Failed to render Gantt schedule.</p>
         </div>
       `;
+    } finally {
+      this.isRendering = false;
     }
   }
 }

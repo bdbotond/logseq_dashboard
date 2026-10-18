@@ -42,7 +42,7 @@ export function buildMindmapMarkdown(tasks: ProjectTask[]): string {
   const lines: string[] = ['# Projects Overview'];
 
   for (const [proj, pTasks] of projectMap.entries()) {
-    lines.push(`## ${proj}`);
+    lines.push(`## ${escapeHtml(proj)}`);
 
     const activeTasks = pTasks.filter((t) => t.status !== 'DONE' && t.status !== 'CANCELLED');
     const completedTasks = pTasks.filter((t) => t.status === 'DONE');
@@ -51,10 +51,10 @@ export function buildMindmapMarkdown(tasks: ProjectTask[]): string {
     if (activeTasks.length > 0) {
       lines.push(`### Active Tasks (${activeTasks.length})`);
       for (const t of activeTasks) {
-        const prio = t.priority ? ` #${t.priority}` : '';
-        const rep = t.repeating ? ` 🔁 ${t.repeating}` : '';
-        const sched = t.scheduled ? ` [Scheduled: ${t.scheduled}${rep}]` : '';
-        const dead = t.deadline ? ` [Due: ${t.deadline}]` : '';
+        const prio = t.priority ? ` #${escapeHtml(t.priority)}` : '';
+        const rep = t.repeating ? ` 🔁 ${escapeHtml(t.repeating)}` : '';
+        const sched = t.scheduled ? ` [Scheduled: ${escapeHtml(t.scheduled)}${rep}]` : '';
+        const dead = t.deadline ? ` [Due: ${escapeHtml(t.deadline)}]` : '';
 
         const dependsOnTitles = (t.dependsOn || [])
           .map((u) => titleMap.get(String(u).trim().toLowerCase()))
@@ -77,8 +77,8 @@ export function buildMindmapMarkdown(tasks: ProjectTask[]): string {
     if (completedTasks.length > 0) {
       lines.push(`### Completed & Past (${completedTasks.length})`);
       for (const t of completedTasks) {
-        const prio = t.priority ? ` #${t.priority}` : '';
-        const finished = t.completedAt ? ` [Completed: ${t.completedAt}]` : '';
+        const prio = t.priority ? ` #${escapeHtml(t.priority)}` : '';
+        const finished = t.completedAt ? ` [Completed: ${escapeHtml(t.completedAt)}]` : '';
 
         const dependsOnTitles = (t.dependsOn || [])
           .map((u) => titleMap.get(String(u).trim().toLowerCase()))
@@ -104,8 +104,8 @@ export function buildMindmapMarkdown(tasks: ProjectTask[]): string {
 export function foldCompletedBranches(node: any): void {
   if (!node) return;
   if (Array.isArray(node.children) && node.children.length > 0 && typeof node.content === 'string') {
-    const text = node.content.toLowerCase();
-    if (text.includes('completed')) {
+    const text = node.content.trim().toLowerCase();
+    if (text.startsWith('completed & past')) {
       node.payload = { ...node.payload, fold: 1 };
     }
   }
@@ -123,6 +123,9 @@ export class MindmapViewer {
   private tasks: ProjectTask[] = [];
   private selectedProject: string = 'ALL';
   private resizeObserver: ResizeObserver | null = null;
+  private rafId: number | null = null;
+  private fitTimer: ReturnType<typeof setTimeout> | null = null;
+  private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -138,7 +141,40 @@ export class MindmapViewer {
     this.render();
   }
 
+  private safeFit(): void {
+    const svg = this.container.querySelector('.ptf-mindmap-svg') as SVGElement | null;
+    if (svg && svg.clientWidth > 0 && svg.clientHeight > 0) {
+      try {
+        this.markmapInstance?.fit();
+      } catch (e) {}
+    }
+  }
+
+  private cancelPendingTimers(): void {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    if (this.fitTimer !== null) {
+      clearTimeout(this.fitTimer);
+      this.fitTimer = null;
+    }
+    if (this.resizeTimer !== null) {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
+    }
+  }
+
   public render(): void {
+    this.cancelPendingTimers();
+
+    if (this.markmapInstance) {
+      try {
+        this.markmapInstance.destroy();
+      } catch (e) {}
+      this.markmapInstance = null;
+    }
+
     const projectSet = new Set<string>();
     for (const t of this.tasks) {
       if (t.project && t.project !== 'General') projectSet.add(t.project);
@@ -166,22 +202,15 @@ export class MindmapViewer {
             <button class="ptf-icon-btn" id="ptf-mm-export" title="Export Mindmap as PNG">📷 PNG</button>
           </div>
         </div>
-        <svg id="ptf-mindmap-svg" class="ptf-mindmap-svg"></svg>
+        <svg class="ptf-mindmap-svg"></svg>
       </div>
     `;
 
-    const svg = this.container.querySelector('#ptf-mindmap-svg') as SVGElement;
+    const svg = this.container.querySelector('.ptf-mindmap-svg') as SVGElement;
     if (!svg) return;
 
-    // Clean up previous instance before re-creating on new SVG element
-    if (this.markmapInstance) {
-      try {
-        this.markmapInstance.destroy();
-      } catch (e) {}
-      this.markmapInstance = null;
-    }
-
-    requestAnimationFrame(() => {
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = null;
       try {
         const md = buildMindmapMarkdown(displayTasks);
         const { root } = this.transformer.transform(md);
@@ -195,8 +224,9 @@ export class MindmapViewer {
           },
           root
         );
-        setTimeout(() => {
-          this.markmapInstance?.fit();
+        this.fitTimer = setTimeout(() => {
+          this.fitTimer = null;
+          this.safeFit();
         }, 50);
 
         const projSelect = this.container.querySelector('.ptf-mm-project-select') as HTMLSelectElement | null;
@@ -211,7 +241,7 @@ export class MindmapViewer {
         const btnExport = this.container.querySelector('#ptf-mm-export');
 
         btnFit?.addEventListener('click', () => {
-          this.markmapInstance?.fit();
+          this.safeFit();
         });
 
         btnIn?.addEventListener('click', () => {
@@ -229,24 +259,31 @@ export class MindmapViewer {
 
         if (!this.resizeObserver && window.ResizeObserver) {
           this.resizeObserver = new ResizeObserver(() => {
-            this.markmapInstance?.fit();
+            if (this.resizeTimer) clearTimeout(this.resizeTimer);
+            this.resizeTimer = setTimeout(() => {
+              this.resizeTimer = null;
+              this.safeFit();
+            }, 100);
           });
           this.resizeObserver.observe(this.container);
         }
       } catch (err) {
         console.error('[ProjectTaskFlow] Error rendering Markmap:', err);
-        this.container.innerHTML = `<div class="ptf-empty-state">Unable to render mindmap: ${err}</div>`;
+        this.container.innerHTML = `<div class="ptf-empty-state">Unable to render mindmap: ${escapeHtml(String(err))}</div>`;
       }
     });
   }
 
   public destroy(): void {
+    this.cancelPendingTimers();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
     if (this.markmapInstance) {
-      this.markmapInstance.destroy();
+      try {
+        this.markmapInstance.destroy();
+      } catch (e) {}
       this.markmapInstance = null;
     }
   }

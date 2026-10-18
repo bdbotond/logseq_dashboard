@@ -15,8 +15,10 @@ export class DashboardRenderer {
   private summaryTable: SummaryTable | null = null;
   private mindmapViewer: MindmapViewer | null = null;
   private ganttChart: GanttChart | null = null;
+  private modalKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private tasks: ProjectTask[] = [];
   private activeSlots = new Set<string>();
+  private slotIntervals = new Map<string, ReturnType<typeof setInterval>>();
 
   private macroSummaryTables = new Map<string, SummaryTable>();
   private macroMindmapViewers = new Map<string, MindmapViewer>();
@@ -33,13 +35,20 @@ export class DashboardRenderer {
     this.activeSlots.add(slot);
   }
 
-  public async refreshAllSlots(): Promise<void> {
-    this.tasks = await this.logseqService.fetchTasksForDashboard();
+  public async refreshAllSlots(preloadedTasks?: ProjectTask[]): Promise<void> {
+    if (this.activeSlots.size === 0 && !this.summaryTable) return;
+
+    this.tasks = preloadedTasks ?? (await this.logseqService.fetchTasksForDashboard());
     const doc = window.parent?.document || document;
 
     for (const slot of Array.from(this.activeSlots)) {
       const slotEl = doc.getElementById(slot) || doc.querySelector(`[data-slot-id="${slot}"]`) || doc.querySelector(`[id*="${slot}"]`);
       if (!slotEl) {
+        const prevInterval = this.slotIntervals.get(slot);
+        if (prevInterval) {
+          clearInterval(prevInterval);
+          this.slotIntervals.delete(slot);
+        }
         this.activeSlots.delete(slot);
         this.macroMindmapViewers.get(slot)?.destroy();
         this.macroGanttCharts.get(slot)?.destroy();
@@ -60,7 +69,7 @@ export class DashboardRenderer {
       const countEl = (window.parent?.document || document).getElementById(`ptf-macro-count-${slot}`);
       if (countEl) countEl.textContent = `${this.tasks.length} tasks`;
 
-      if (!table && !mm && !gantt) {
+      if (!table && !mm && !gantt && !this.slotIntervals.has(slot)) {
         await this.renderMacroSlot(slot);
       }
     }
@@ -192,6 +201,12 @@ export class DashboardRenderer {
     });
     this.constrainHostSlot(slot);
 
+    const existingInterval = this.slotIntervals.get(slot);
+    if (existingInterval) {
+      clearInterval(existingInterval);
+      this.slotIntervals.delete(slot);
+    }
+
     let attempts = 0;
     const interval = setInterval(() => {
       this.constrainHostSlot(slot);
@@ -201,6 +216,7 @@ export class DashboardRenderer {
 
       if ((tableMount && mmMount && ganttMount) || ++attempts >= 25) {
         clearInterval(interval);
+        this.slotIntervals.delete(slot);
         if (tableMount) {
           const table = new SummaryTable(tableMount, () => this.refreshAllSlots());
           table.setTasks(this.tasks);
@@ -220,12 +236,32 @@ export class DashboardRenderer {
         }
       }
     }, 40);
+    this.slotIntervals.set(slot, interval);
+  }
+
+  public closeModal(hideUI = true): void {
+    if (this.modalKeyHandler) {
+      window.removeEventListener('keydown', this.modalKeyHandler);
+      this.modalKeyHandler = null;
+    }
+    this.mindmapViewer?.destroy();
+    this.mindmapViewer = null;
+    this.ganttChart?.destroy();
+    this.ganttChart = null;
+    this.summaryTable = null;
+    if (this.container) {
+      this.container.innerHTML = '';
+    }
+    if (hideUI) {
+      logseq.hideMainUI();
+    }
   }
 
   /**
    * Mount and show the interactive modal dashboard with zoom, pan, and collapsible tree
    */
   public async openFullDashboard(container: HTMLElement): Promise<void> {
+    this.closeModal(false);
     this.container = container;
     this.tasks = await this.logseqService.fetchTasksForDashboard();
 
@@ -305,19 +341,12 @@ export class DashboardRenderer {
       this.ganttChart.setTasks(this.tasks);
     }
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
+    const close = () => this.closeModal(true);
 
-    const close = () => {
-      window.removeEventListener('keydown', onKeyDown);
-      this.mindmapViewer?.destroy();
-      this.mindmapViewer = null;
-      this.ganttChart?.destroy();
-      this.ganttChart = null;
-      this.summaryTable = null;
-      this.container!.innerHTML = '';
-      logseq.hideMainUI();
+    this.modalKeyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.getElementById('ptf-dependency-modal-overlay')) {
+        close();
+      }
     };
 
     closeBtn?.addEventListener('click', close);
@@ -325,7 +354,7 @@ export class DashboardRenderer {
       if (e.target === overlay) close();
     });
 
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', this.modalKeyHandler);
 
     refreshBtn?.addEventListener('click', async () => {
       await this.refreshAllSlots();
